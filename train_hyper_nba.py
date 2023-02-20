@@ -43,6 +43,11 @@ parser.add_argument('--model_save_epoch', type=int, default=5)
 
 parser.add_argument('--epoch_continue', type=int, default=0)
 parser.add_argument('--gpu', type=int, default=0)
+parser.add_argument('--type_gen', type=int, default =0)
+# 0 => use affinity matrix
+# 1 => use knn
+# 2 => use lg1_norm
+# 3=>  use clustering
 args = parser.parse_args()
 
 """ setup """
@@ -59,7 +64,10 @@ print(args)
 
 def train(train_loader,epoch):
     model.train()
+    #trains model
+    # it helps in training of the model
     total_iter_num = len(train_loader)
+    
     iter_num = 0
     for data in train_loader:
         total_loss,loss_pred,loss_recover,loss_kl,loss_diverse = model(data)
@@ -79,10 +87,13 @@ def train(train_loader,epoch):
 
 """ model & optimizer """
 model = GroupNet(args,device)
+# first time model of groupnet is called here, with all the arguements that are rsupplied by the user, all the arguements canbe seen there
+
 optimizer = optim.Adam(model.parameters(), lr=args.lr)
 scheduler = lr_scheduler.StepLR(optimizer, step_size=args.decay_step, gamma=args.decay_gamma)
 
 """ dataloader """
+#NBA Dataset is defining all the parameters that returns the matrix 
 train_set = NBADataset(
     obs_len=args.past_length,
     pred_len=args.future_length,

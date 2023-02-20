@@ -5,6 +5,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from model.hypergraph_generation.nearest_neighbour import gen_knn_hg
+from model.hypergraph_generation.sparse import gen_l1_hg
+from model.hypergraph_generation.clustering import gen_clustering_hg
+
+import warnings
+warnings.filterwarnings('ignore')
+
 
 def encode_onehot(labels):
     classes = set(labels)
@@ -246,7 +253,7 @@ class MS_HGNN_hyper(nn.Module):
     """Pooling module as proposed in our paper"""
     def __init__(
         self, embedding_dim=64, h_dim=64, mlp_dim=1024, bottleneck_dim=1024,
-        activation='relu', batch_norm=True, dropout=0.0, nmp_layers=4, scale=2, vis=False, actor_number=11
+        activation='relu', batch_norm=True, dropout=0.0, nmp_layers=4, scale=2, vis=False, actor_number=11, type_gen =0
     ):
         super(MS_HGNN_hyper, self).__init__()
 
@@ -259,6 +266,7 @@ class MS_HGNN_hyper(nn.Module):
         self.activation = activation
         self.scale = scale
         self.vis = vis
+        self.type_gen = type_gen
 
         mlp_pre_dim = embedding_dim + h_dim
         self.vis = vis
@@ -383,12 +391,50 @@ class MS_HGNN_hyper(nn.Module):
 
 
     def forward(self, h_states, corr):
-        curr_hidden = h_states #(num_pred, h_dim)
 
-        if self.listall:
-            H = self.init_adj_attention_listall(curr_hidden,corr,scale_factor=self.scale)
-        else:
-            H = self.init_adj_attention(curr_hidden,corr,scale_factor=self.scale)
+        curr_hidden = h_states
+
+        if self.type_gen == 0: 
+            if self.listall:
+                H = self.init_adj_attention_listall(curr_hidden,corr,scale_factor=self.scale)
+            else:
+                H = self.init_adj_attention(curr_hidden,corr,scale_factor=self.scale)
+
+        if self.type_gen == 1 or self.type_gen == 2:
+            h_states1 = h_states.cpu().detach().numpy()
+
+            H = np.zeros(shape=(len(h_states1), len(h_states1[0]),len(h_states1[0])))
+            actor_number = h_states.shape[1]
+            if self.scale == actor_number:
+                H = torch.ones(h_states.shape[0],1,actor_number).type_as(h_states)
+            else :
+                for i in range(h_states.shape[0]):
+                    if self.type_gen == 1:
+                        hg = gen_knn_hg(h_states1[i],is_prob =False, n_neighbors=self.scale-1)
+                    else :
+                        hg = gen_l1_hg(h_states1[i], gamma=1., n_neighbors=self.scale-1, log=False)
+                    H[i] = np.ceil(np.transpose(hg._H.toarray()))
+                H = torch.from_numpy(H).float().to(h_states.get_device())
+
+        if self.type_gen == 3:
+            h_states1 = h_states.cpu().detach().numpy()
+            H = np.zeros(shape=(len(h_states1), len(h_states1[0]),len(h_states1[0])))
+            actor_number = h_states.shape[1]
+            if self.scale == 1:
+                H = torch.ones(h_states.shape[0],1,actor_number).type_as(h_states)
+            else :
+                for i in range(h_states.shape[0]):
+                    hg = gen_clustering_hg(h_states1[i], n_clusters=self.scale)
+                    A = np.transpose(hg._H.toarray())
+                    H1 = np.zeros((11,11))
+                    for index in range(len(A)) :
+                        result = np.where( A[index] == 1.)
+                        for x in result[0]:
+                            for y in result[0]:
+                                H1[x][y] = 1.
+
+                    H[i] = H1
+                H = torch.from_numpy(H).float().to(h_states.get_device())
 
         edge_hidden = self.node2edge(curr_hidden, H, idx=0) 
         edge_feat, factor = self.nmp_mlp_start(edge_hidden)                      

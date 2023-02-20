@@ -1,5 +1,4 @@
 from random import sample
-from tkinter import TRUE
 import torch
 import numpy as np
 from torch import nn
@@ -198,7 +197,8 @@ class PastEncoder(nn.Module):
                 bottleneck_dim=self.model_dim,
                 batch_norm=0,
                 nmp_layers=1,
-                scale=args.hyper_scales[0]
+                scale=args.hyper_scales[0],
+                type_gen = args.type_gen
             )
         if len(args.hyper_scales) > 1:
             self.interaction_hyper2 = MS_HGNN_hyper(
@@ -208,7 +208,8 @@ class PastEncoder(nn.Module):
                 bottleneck_dim=self.model_dim,
                 batch_norm=0,
                 nmp_layers=1,
-                scale=args.hyper_scales[1]
+                scale=args.hyper_scales[1],
+                type_gen = args.type_gen
             )
 
         if len(args.hyper_scales) > 2:
@@ -219,7 +220,8 @@ class PastEncoder(nn.Module):
                 bottleneck_dim=self.model_dim,
                 batch_norm=0,
                 nmp_layers=1,
-                scale=args.hyper_scales[2]
+                scale=args.hyper_scales[2],
+                type_gen = args.type_gen
             )
 
         self.pos_encoder = PositionalAgentEncoding(self.model_dim, 0.1, concat=True)
@@ -231,22 +233,54 @@ class PastEncoder(nn.Module):
         category[0:5,0] = 1
         category[5:10,1] = 1
         category[10,2] = 1
+
+        # these categories are basically the types of player, first f5 ig being attacker, next 5 defender, 1 perhaps special player in basketball
+
         category = category.repeat(B,1,1)
+        # print(category.shape)  31x11x3
+        # repeats the above diagram in three different directions by given paramters
+
         x = torch.cat((x,category),dim=-1)
+
+        # print(x.shape) => concat in the last dimension
+        # so the size now is 32 x 11 x 67
         return x
 
     def forward(self, inputs,batch_size, agent_num):
-        length = inputs.shape[1]
+        # this function is called from forward of the GROUPNET module
+        #input (352,5,4)
 
+        length = inputs.shape[1]
+        # past length
+        # print("here in past encoder")
         tf_in = self.input_fc(inputs).view(batch_size*agent_num, length, self.model_dim)
+        #first mlp, used to map the 4 features in 64 dimensions )
+        # tf_in shape(352,5,64)
 
         tf_in_pos = self.pos_encoder(tf_in, num_a=batch_size*agent_num)
+        # tf_pos_in is of same shape (352,11,64)
+        # positional encoder, i guess works on normalizing the position and velocity.
+
+
         tf_in_pos = tf_in_pos.view(batch_size, agent_num, length, self.model_dim)
+        # tf_in_pos is changed back (32,11,64))
+
   
         ftraj_input = self.input_fc2(tf_in_pos.contiguous().view(batch_size, agent_num, length*self.model_dim))
+        # print("fraj_input_0", ftraj_input.shape) (32,11,64)
+        # second mlp is given perhaps to calulate the initial embeddings.
+
         ftraj_input = self.input_fc3(self.add_category(ftraj_input))
+        # the retured  data from the category contains the data in the form of 32 x 11 x 67, but output dimesion is still 32 x 11 x64
+        # print("fraj_input", ftraj_input.shape) => (32,11,64)
+
         query_input = F.normalize(ftraj_input,p=2,dim=2)
+        #  normalizinf the latent space dimension
+    
         feat_corr = torch.matmul(query_input,query_input.permute(0,2,1))
+        # this is the affinity matrix
+        
+        # print("feat_corr", feat_corr.shape)
         ftraj_inter,_ = self.interaction(ftraj_input)
         if len(self.args.hyper_scales) > 0:
             ftraj_inter_hyper,_ = self.interaction_hyper(ftraj_input,feat_corr)
@@ -297,7 +331,9 @@ class FutureEncoder(nn.Module):
                 batch_norm=0,
                 nmp_layers=1,
                 scale=args.hyper_scales[0],
-                vis=False
+                vis=False,
+                type_gen = args.type_gen
+
             )
         if len(args.hyper_scales) > 1:
             self.interaction_hyper2 = MS_HGNN_hyper(
@@ -308,7 +344,9 @@ class FutureEncoder(nn.Module):
                 batch_norm=0,
                 nmp_layers=1,
                 scale=args.hyper_scales[1],
-                vis=False
+                vis=False,
+                type_gen = args.type_gen
+
             )
         if len(args.hyper_scales) > 2:
             self.interaction_hyper3 = MS_HGNN_hyper(
@@ -319,7 +357,9 @@ class FutureEncoder(nn.Module):
                 batch_norm=0,
                 nmp_layers=1,
                 scale=args.hyper_scales[2],
-                vis=False
+                vis=False,
+                type_gen = args.type_gen
+
             )
 
         self.pos_encoder = PositionalAgentEncoding(self.model_dim, 0.1, concat=True)
@@ -473,19 +513,32 @@ class GroupNet(nn.Module):
         device = self.device
         batch_size = data['past_traj'].shape[0]
         agent_num = data['past_traj'].shape[1]
-        
+        # data['past_traj'] is 32(batch size)x11(agents)Xpast_lengthXcoordinates
+        # data['future_traj'] is 32(batch size)x11(agents)Xpast_lengthXcoordinates 
+
+
         past_traj = data['past_traj'].view(batch_size*agent_num,self.args.past_length,2).to(device).contiguous()
         future_traj = data['future_traj'].view(batch_size*agent_num,self.args.future_length,2).to(device).contiguous()
 
+        # the above two lines combine the above two paramters to view the data as one combined unit instead of 2.
+        # that batch size x agent_num = 32X11 = 352
+        # so the shape is now (352,11,2)
+
+
         past_vel = past_traj[:,1:] - past_traj[:,:-1, :]
         past_vel = torch.cat([past_vel[:,[0]], past_vel], dim=1)
+        # above code genrate dthe velocity of each player by subtrating position, assuming same cordinates
+        # shape of past_traj is (352,11,2)
 
         future_vel = future_traj - torch.cat([past_traj[:,[-1]], future_traj[:,:-1, :]],dim=1)
         cur_location = past_traj[:,[-1]]
 
         inputs = torch.cat((past_traj,past_vel),dim=-1)
+        # the input is made by calculating both the position and velocity and hence,we have four features instead of two.
+
         inputs_for_posterior = torch.cat((future_traj,future_vel),dim=-1)
 
+        #calling past encoder
         past_feature = self.past_encoder(inputs,batch_size,agent_num)
         qz_param = self.future_encoder(inputs_for_posterior,batch_size,agent_num,past_feature)
 
