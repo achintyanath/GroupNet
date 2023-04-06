@@ -24,15 +24,17 @@ class Event:
         self.player_ids_dict = dict(zip(player_ids, values))
     
     def get_traj(self):
-        moment_length = len(self.moments)
-        traj_num = moment_length // 150 # 50 + 100, past 50(0,04s, 2s), future 100 (0.04s, 4s)
-        all_all_player_locations = [] #(N,15,11,2)
+        moment_length = len(self.moments)     
+        total_len  = 16
+        total_time = total_len*10
+        traj_num = moment_length // total_time # 50 + 100, past 50(0.04s, 2s), future 100 (0.04s, 4s)
+        all_all_player_locations = [] #(N,total_len,11,2)
         for i in range(traj_num):
-            all_player_locations = [] # (15,11,2)
+            # all_player_locations = [] # (total_len,11,2)
             # check if is 10 people
             flag = True
-            for j in range(15):
-                time_stamp = 150 * i + 10 * j
+            for j in range(total_len):
+                time_stamp = total_time * i + 10 * j
                 cur_moment = self.moments[time_stamp]
                 if len(cur_moment.players) < 10:
                     flag = False
@@ -40,8 +42,8 @@ class Event:
                 continue
             # check if the same people 
             flag = True
-            time_stamp1 = 150 * i
-            time_stamp2 = 150 * i + 140
+            time_stamp1 = total_time * i
+            time_stamp2 = total_time * i + total_time-10
             cur_moment1 = self.moments[time_stamp1]
             cur_moment2 = self.moments[time_stamp2]
             for j in range(10):
@@ -50,42 +52,57 @@ class Event:
             if not flag:
                 continue
 
-            time_stamp1 = 150 * i
-            time_stamp2 = 150 * i + 140
-            if self.moments[time_stamp2].game_clock - self.moments[time_stamp1].game_clock < -5.7 or self.moments[time_stamp2].game_clock - self.moments[time_stamp1].game_clock> -5.5:
-                continue
-
-            for j in range(15):
-                time_stamp = 150 * i + 10 * j
+            # if self.moments[time_stamp2].game_clock - self.moments[time_stamp1].game_clock < -5.7 or self.moments[time_stamp2].game_clock - self.moments[time_stamp1].game_clock> -5.5:
+            #     continue
+            all_player_locations = [] # (total_len,11,2)
+            for j in range(total_len-1):
+                time_stamp = total_time * i + 10 * j
                 cur_moment = self.moments[time_stamp]
                 player_locations = []  #(11,2)
+
                 for k in range(10):
-                    player_locations.append([cur_moment.players[k].x,cur_moment.players[k].y])
-                player_locations.append([cur_moment.ball.x,cur_moment.ball.y])
+                    player_locations.append([cur_moment.players[k].x,cur_moment.players[k].y,0])
+                player_locations.append([cur_moment.ball.x,cur_moment.ball.y,0])
                 all_player_locations.append(player_locations)
             all_all_player_locations.append(all_player_locations)
+
+            for d in range(1,6):
+                all_player_locations = [] # (total_len,11,2)
+                for j in range(total_len):
+                    if j+1 == d:
+                        continue
+                    time_stamp = total_time * i + 10 * j
+                    cur_moment = self.moments[time_stamp]
+                    player_locations = []  #(11,2)
+
+                    for k in range(10):
+                        player_locations.append([cur_moment.players[k].x,cur_moment.players[k].y,d*(94/28)])
+                    player_locations.append([cur_moment.ball.x,cur_moment.ball.y,d*(94/28)])
+                    all_player_locations.append(player_locations)
+                all_all_player_locations.append(all_player_locations)
         all_all_player_locations = np.array(all_all_player_locations,dtype=np.float32)
         del_list = []
         # check if the traj contiguous
         for i in range(len(all_all_player_locations)):
-            seq_data = all_all_player_locations[i] #(15,11,2)
+            seq_data = all_all_player_locations[i] #(total_len,11,2)
             diff_v = seq_data[1:,:-1,:] - seq_data[:-1,:-1,:]
             diff_a = diff_v[1:,:,:] - diff_v[:-1,:,:]
             diff_v = np.linalg.norm(diff_v,ord=2,axis=2)
             diff_a = np.linalg.norm(diff_a,ord=2,axis=2)
-            if np.max(diff_v) >= 9 or np.max(diff_a) >= 5: # people cannot move that fast
+            if np.max(diff_v) >= 11 or np.max(diff_a) >= 7: # people cannot move that fast
                 del_list.append(i)
         all_all_player_locations = np.delete(all_all_player_locations,del_list,axis=0)
 
         # check if the ball out of court
         del_list = []
         for i in range(len(all_all_player_locations)):
-            seq_data = all_all_player_locations[i] #(15,11,2)
+            seq_data = all_all_player_locations[i] #(total_len,11,2)
             ball_x = seq_data[:,-1,0]
             ball_y = seq_data[:,-1,1]
             if np.max(ball_x) > Constant.X_MAX - Constant.DIFF or np.min(ball_x) < 0 or np.max(ball_y) > Constant.Y_MAX or np.min(ball_y) < 0:
                 del_list.append(i)
         all_all_player_locations = np.delete(all_all_player_locations,del_list,axis=0)
+        # print(all_all_player_locations)
         return all_all_player_locations
 
     def update_radius(self, i, player_circles, ball_circle, annotations, clock_info):

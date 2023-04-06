@@ -61,6 +61,7 @@ if torch.cuda.is_available():
     torch.cuda.set_device(args.gpu)
 print('device:',device)
 print(args)
+# torch.set_default_tensor_type(args.gpu)
 
 def train(train_loader,epoch):
     model.train()

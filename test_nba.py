@@ -10,9 +10,9 @@ import torch
 from data.dataloader_nba import NBADataset, seq_collate
 from model.GroupNet_nba import GroupNet
 from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-from matplotlib import animation
-import matplotlib.lines as mlines
+# import matplotlib.pyplot as plt
+# from matplotlib import animation
+# import matplotlib.lines as mlines
 
 class Constant:
     """A class for handling constants"""
@@ -33,69 +33,69 @@ class Constant:
 
 def draw_result(future,past,mode='pre'):
     # b n t 2
-    print('drawing...')
-    trajs = np.concatenate((past,future), axis = 2)
-    batch = trajs.shape[0]
-    for idx in range(50):
-        plt.clf()
-        traj = trajs[idx]
-        traj = traj*94/28
-        actor_num = traj.shape[0]
-        length = traj.shape[1]
+    # print('drawing...')
+    # trajs = np.concatenate((past,future), axis = 2)
+    # batch = trajs.shape[0]
+    # for idx in range(50):
+    #     plt.clf()
+    #     traj = trajs[idx]
+    #     traj = traj*94/28
+    #     actor_num = traj.shape[0]
+    #     length = traj.shape[1]
         
-        ax = plt.axes(xlim=(Constant.X_MIN,
-                            Constant.X_MAX),
-                        ylim=(Constant.Y_MIN,
-                            Constant.Y_MAX))
-        ax.axis('off')
-        fig = plt.gcf()
-        ax.grid(False)  # Remove grid
+    #     ax = plt.axes(xlim=(Constant.X_MIN,
+    #                         Constant.X_MAX),
+    #                     ylim=(Constant.Y_MIN,
+    #                         Constant.Y_MAX))
+    #     ax.axis('off')
+    #     fig = plt.gcf()
+    #     ax.grid(False)  # Remove grid
 
-        colorteam1 = 'dodgerblue'
-        colorteam2 = 'orangered'
-        colorball = 'limegreen'
-        colorteam1_pre = 'skyblue'
-        colorteam2_pre = 'lightsalmon'
-        colorball_pre = 'mediumspringgreen'
+    #     colorteam1 = 'dodgerblue'
+    #     colorteam2 = 'orangered'
+    #     colorball = 'limegreen'
+    #     colorteam1_pre = 'skyblue'
+    #     colorteam2_pre = 'lightsalmon'
+    #     colorball_pre = 'mediumspringgreen'
 		
-        for j in range(actor_num):
-            if j < 5:
-                color = colorteam1
-                color_pre = colorteam1_pre
-            elif j < 10:
-                color = colorteam2
-                color_pre = colorteam2_pre
-            else:
-                color_pre = colorball_pre
-                color = colorball
-            for i in range(length):
-                points = [(traj[j,i,0],traj[j,i,1])]
-                (x, y) = zip(*points)
-                # plt.scatter(x, y, color=color,s=20,alpha=0.3+i*((1-0.3)/length))
-                if i < 5:
-                    plt.scatter(x, y, color=color_pre,s=20,alpha=1)
-                else:
-                    plt.scatter(x, y, color=color,s=20,alpha=1)
+    #     for j in range(actor_num):
+    #         if j < 5:
+    #             color = colorteam1
+    #             color_pre = colorteam1_pre
+    #         elif j < 10:
+    #             color = colorteam2
+    #             color_pre = colorteam2_pre
+    #         else:
+    #             color_pre = colorball_pre
+    #             color = colorball
+    #         for i in range(length):
+    #             points = [(traj[j,i,0],traj[j,i,1])]
+    #             (x, y) = zip(*points)
+    #             # plt.scatter(x, y, color=color,s=20,alpha=0.3+i*((1-0.3)/length))
+    #             if i < 5:
+    #                 plt.scatter(x, y, color=color_pre,s=20,alpha=1)
+    #             else:
+    #                 plt.scatter(x, y, color=color,s=20,alpha=1)
 
-            for i in range(length-1):
-                points = [(traj[j,i,0],traj[j,i,1]),(traj[j,i+1,0],traj[j,i+1,1])]
-                (x, y) = zip(*points)
-                # plt.plot(x, y, color=color,alpha=0.3+i*((1-0.3)/length),linewidth=2)
-                if i < 4:
-                    plt.plot(x, y, color=color_pre,alpha=0.5,linewidth=2)
-                else:
-                    plt.plot(x, y, color=color,alpha=1,linewidth=2)
+    #         for i in range(length-1):
+    #             points = [(traj[j,i,0],traj[j,i,1]),(traj[j,i+1,0],traj[j,i+1,1])]
+    #             (x, y) = zip(*points)
+    #             # plt.plot(x, y, color=color,alpha=0.3+i*((1-0.3)/length),linewidth=2)
+    #             if i < 4:
+    #                 plt.plot(x, y, color=color_pre,alpha=0.5,linewidth=2)
+    #             else:
+    #                 plt.plot(x, y, color=color,alpha=1,linewidth=2)
 
-        court = plt.imread("datasets/nba/court.png")
-        plt.imshow(court, zorder=0, extent=[Constant.X_MIN, Constant.X_MAX - Constant.DIFF,
-                                            Constant.Y_MAX, Constant.Y_MIN],alpha=0.5)
-        if not os.path.isdir("vis/nba/"):
-            os.makedirs("vis/nba/")
-        if mode == 'pre':
-            plt.savefig('vis/nba/'+str(idx)+'pre.png')
-        else:
-            plt.savefig('vis/nba/'+str(idx)+'gt.png')
-    print('ok')
+    #     court = plt.imread("datasets/nba/court.png")
+    #     plt.imshow(court, zorder=0, extent=[Constant.X_MIN, Constant.X_MAX - Constant.DIFF,
+    #                                         Constant.Y_MAX, Constant.Y_MIN],alpha=0.5)
+    #     if not os.path.isdir("vis/nba/"):
+    #         os.makedirs("vis/nba/")
+    #     if mode == 'pre':
+    #         plt.savefig('vis/nba/'+str(idx)+'pre.png')
+    #     else:
+    #         plt.savefig('vis/nba/'+str(idx)+'gt.png')
+    # print('ok')
     return 
 
 
@@ -151,7 +151,7 @@ def test_model_all(test_loader, args):
     l2error_dest_36s = 0
 
     for data in test_loader:
-        future_traj = np.array(data['future_traj']) * args.traj_scale # B,N,T,2
+        future_traj = np.array(data['future_traj'][:,:,:,:-1]) * args.traj_scale # B,N,T,2
         with torch.no_grad():
             prediction = model.inference(data)
         prediction = prediction * args.traj_scale
@@ -238,7 +238,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     """ setup """
-    names = [x for x in args.model_names.split(',')]
+    # names = [x for x in args.model_names.split(',')]
+    names = ["20","25","30","35","40","45","50"]
 
     torch.set_default_dtype(torch.float32)
     device = torch.device('cuda', index=args.gpu) if args.gpu >= 0 and torch.cuda.is_available() else torch.device('cpu')

@@ -511,8 +511,19 @@ class GroupNet(nn.Module):
 
     def forward(self,data):
         device = self.device
+        # class_of_trajectory = torch.zeros(batch_size)
+      
         batch_size = data['past_traj'].shape[0]
         agent_num = data['past_traj'].shape[1]
+        class_of_trajectory = torch.zeros(batch_size)
+        for i in range(batch_size):
+            class_of_trajectory[i] = data['past_traj'][i][0][0][2]
+
+        data['past_traj']=data['past_traj'][:,:,:,:-1]
+        # print(data['past_traj'].shape)
+        data['future_traj']=data['future_traj'][:,:,:,:-1]
+
+
         # data['past_traj'] is 32(batch size)x11(agents)Xpast_lengthXcoordinates
         # data['future_traj'] is 32(batch size)x11(agents)Xpast_lengthXcoordinates 
 
@@ -607,6 +618,8 @@ class GroupNet(nn.Module):
         device = self.device
         batch_size = data['past_traj'].shape[0]
         agent_num = data['past_traj'].shape[1]
+
+        data['past_traj'] = data['past_traj'][:,:,:,:-1]
         
         past_traj = data['past_traj'].view(batch_size*agent_num,self.args.past_length,2).to(device).contiguous()
 
