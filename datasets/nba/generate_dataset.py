@@ -36,6 +36,9 @@ train_set = all_trajs[index[:int(0.7*len(all_trajs))]]
 test_set = all_trajs[index[int(0.7*len(all_trajs)):]]
 sanitised_train_set = np.zeros((1,15, 11, 3))
 
+train_set_no_aug = np.zeros((1,15, 11, 3))
+
+
 for i in range(test_set.shape[0]):
 	traj = test_set[i]
 	# print(traj[0][0][2])
@@ -45,12 +48,25 @@ for i in range(test_set.shape[0]):
 
 print(sanitised_train_set.shape)
 
+
+for i in range(train_set.shape[0]):
+	traj = train_set[i]
+	# print(traj[0][0][2])
+	if traj[0][0][2] == 0:
+		traj = traj.reshape(1,15,11,3)
+		train_set_no_aug = np.append(train_set_no_aug,traj,axis = 0)
+
 sanitised_train_set = sanitised_train_set[1:,:,:,:]
+train_set_no_aug = train_set_no_aug[1:,:,:,:]
+
 
 print('train num:',train_set.shape[0])
 print('test num:',test_set.shape[0])
 print('santised', sanitised_train_set.shape[0])
+print('no_aug', train_set_no_aug.shape[0])
+
 test_set = sanitised_train_set
 
 np.save(data_target+'/train.npy',train_set)
 np.save(data_target+'/test.npy',test_set)
+np.save(data_target+'/train_no_aug.npy', train_set_no_aug)

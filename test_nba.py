@@ -238,8 +238,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     """ setup """
-    # names = [x for x in args.model_names.split(',')]
-    names = ["20","25","30","35","40","45","50"]
+    names = [x for x in args.model_names.split(',')]
+    # names = ["20","25","30","35","40","45","50"]
 
     torch.set_default_dtype(torch.float32)
     device = torch.device('cuda', index=args.gpu) if args.gpu >= 0 and torch.cuda.is_available() else torch.device('cpu')

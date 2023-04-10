@@ -483,29 +483,50 @@ class GroupNet(nn.Module):
     def set_device(self, device):
         self.device = device
         self.to(device)
+
+    def calculate_loss_classwise(self, loss_arr,class_):
+        loss = 0
+        for x, diff in zip(class_, loss_arr):
+            if x < 1e-6:
+                loss += diff.sum()
+            else:
+                loss += 1.5*diff.sum()
+        return loss
     
-    def calculate_loss_pred(self,pred,target,batch_size):
-        loss = (target-pred).pow(2).sum()
+    def calculate_loss_pred(self,pred,target,batch_size, class_):
+        loss_arr = (target-pred).pow(2)
+        loss = self.calculate_loss_classwise(loss_arr,class_)
         loss /= batch_size
         loss /= pred.shape[1]
         return loss
     
-    def calculate_loss_kl(self,qz_distribution,pz_distribution,batch_size,agent_num,min_clip):
-        loss = qz_distribution.kl(pz_distribution).sum()
+    def calculate_loss_kl(self,qz_distribution,pz_distribution,batch_size,agent_num,min_clip,class_):
+        loss_arr = qz_distribution.kl(pz_distribution)
+        loss = self.calculate_loss_classwise(loss_arr, class_)
         loss /= (batch_size * agent_num)
         loss_clamp = loss.clamp_min_(min_clip)
         return loss_clamp
 
-    def calculate_loss_recover(self,pred,target,batch_size):
-        loss = (target-pred).pow(2).sum()
+    def calculate_loss_recover(self,pred,target,batch_size,class_):
+        loss_arr = (target-pred).pow(2)
+        loss = self.calculate_loss_classwise(loss_arr,class_)
         loss /= batch_size
         loss /= pred.shape[1]
         return loss
     
-    def calculate_loss_diverse(self,pred,target,batch_size):
+    def calculate_loss_diverse(self,pred,target,batch_size, class_):
+        # print(pred.shape)
+        # print(target.shape)
         diff = target.unsqueeze(1) - pred
+
         avg_dist = diff.pow(2).sum(dim=-1).sum(dim=-1)
         loss = avg_dist.min(dim=1)[0]
+
+        for i in range(loss.shape[0]):
+            if class_[i] < 1e-6:
+                pass
+            else:
+                loss[i] = 1.5*loss[i]
         loss = loss.mean() 
         return loss
 
@@ -515,14 +536,14 @@ class GroupNet(nn.Module):
       
         batch_size = data['past_traj'].shape[0]
         agent_num = data['past_traj'].shape[1]
-        class_of_trajectory = torch.zeros(batch_size)
+        class_of_trajectory = torch.zeros(batch_size*agent_num)
         for i in range(batch_size):
-            class_of_trajectory[i] = data['past_traj'][i][0][0][2]
+            for j in range(agent_num):
+                class_of_trajectory[i*agent_num+j] = data['past_traj'][i][j][0][2]
+        # print(class_of_trajectory)
 
         data['past_traj']=data['past_traj'][:,:,:,:-1]
-        # print(data['past_traj'].shape)
         data['future_traj']=data['future_traj'][:,:,:,:-1]
-
 
         # data['past_traj'] is 32(batch size)x11(agents)Xpast_lengthXcoordinates
         # data['future_traj'] is 32(batch size)x11(agents)Xpast_lengthXcoordinates 
@@ -553,6 +574,7 @@ class GroupNet(nn.Module):
         past_feature = self.past_encoder(inputs,batch_size,agent_num)
         qz_param = self.future_encoder(inputs_for_posterior,batch_size,agent_num,past_feature)
 
+
         ### q dist ###
         if self.args.ztype == 'gaussian':
             qz_distribution = Normal(params=qz_param)
@@ -578,10 +600,13 @@ class GroupNet(nn.Module):
         ### use q ###
         # z = qz_sampled
         pred_traj,recover_traj = self.decoder(past_feature,qz_sampled,batch_size,agent_num,past_traj,cur_location,sample_num=1)
-        loss_pred = self.calculate_loss_pred(pred_traj,future_traj,batch_size)
+        # print("f", future_traj.shape)
 
-        loss_recover = self.calculate_loss_recover(recover_traj,past_traj,batch_size)
-        loss_kl = self.calculate_loss_kl(qz_distribution,pz_distribution,batch_size,agent_num,self.args.min_clip)
+
+        loss_pred = self.calculate_loss_pred(pred_traj,future_traj,batch_size, class_of_trajectory)
+
+        loss_recover = self.calculate_loss_recover(recover_traj,past_traj,batch_size, class_of_trajectory)
+        loss_kl = self.calculate_loss_kl(qz_distribution,pz_distribution,batch_size,agent_num,self.args.min_clip, class_of_trajectory)
         
 
         ### p dist for best 20 loss ###
@@ -605,7 +630,8 @@ class GroupNet(nn.Module):
         # z = pz_sampled
 
         diverse_pred_traj,_ = self.decoder(past_feature_repeat,pz_sampled,batch_size,agent_num,past_traj,cur_location,sample_num=20,mode='inference')
-        loss_diverse = self.calculate_loss_diverse(diverse_pred_traj,future_traj,batch_size)
+        # print("diverse", diverse_pred_traj.shape)
+        loss_diverse = self.calculate_loss_diverse(diverse_pred_traj,future_traj,batch_size, class_of_trajectory)
         total_loss = loss_pred + loss_recover + loss_kl+ loss_diverse
 
         return total_loss, loss_pred.item(), loss_recover.item(), loss_kl.item(), loss_diverse.item()

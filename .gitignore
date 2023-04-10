@@ -17,3 +17,6 @@ saved_models
 *.pyc
 correct_test
 data
+weights
+no_aug
+weights_great

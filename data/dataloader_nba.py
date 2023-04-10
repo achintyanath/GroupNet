@@ -36,10 +36,10 @@ class NBADataset(Dataset):
         self.trajs = np.load(data_root)
         self.trajs /= (94/28) # Turn to meters
         # print(self.trajs)
-        if training:
-            self.trajs = self.trajs[:32500]
-        else:
-            self.trajs = self.trajs[:12500]
+        #if training:
+        #    self.trajs = self.trajs[:32500]
+        #else:
+        #    self.trajs = self.trajs[:12500]
 
         self.batch_len = len(self.trajs)
         # print(self.batch_len)
