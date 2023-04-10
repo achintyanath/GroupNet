@@ -494,22 +494,25 @@ class GroupNet(nn.Module):
         return loss
     
     def calculate_loss_pred(self,pred,target,batch_size, class_):
-        loss_arr = (target-pred).pow(2)
-        loss = self.calculate_loss_classwise(loss_arr,class_)
+        # loss_arr = (target-pred).pow(2)
+        # loss = self.calculate_loss_classwise(loss_arr,class_)
+        loss = (target-pred).pow(2).sum()
         loss /= batch_size
         loss /= pred.shape[1]
         return loss
     
     def calculate_loss_kl(self,qz_distribution,pz_distribution,batch_size,agent_num,min_clip,class_):
-        loss_arr = qz_distribution.kl(pz_distribution)
-        loss = self.calculate_loss_classwise(loss_arr, class_)
+        # loss_arr = qz_distribution.kl(pz_distribution)
+        # loss = self.calculate_loss_classwise(loss_arr, class_)
+        loss = qz_distribution.kl(pz_distribution).sum()
         loss /= (batch_size * agent_num)
         loss_clamp = loss.clamp_min_(min_clip)
         return loss_clamp
 
     def calculate_loss_recover(self,pred,target,batch_size,class_):
-        loss_arr = (target-pred).pow(2)
-        loss = self.calculate_loss_classwise(loss_arr,class_)
+        # loss_arr = (target-pred).pow(2)
+        # loss = self.calculate_loss_classwise(loss_arr,class_)
+        loss= (target-pred).pow(2).sum()
         loss /= batch_size
         loss /= pred.shape[1]
         return loss
@@ -522,11 +525,11 @@ class GroupNet(nn.Module):
         avg_dist = diff.pow(2).sum(dim=-1).sum(dim=-1)
         loss = avg_dist.min(dim=1)[0]
 
-        for i in range(loss.shape[0]):
-            if class_[i] < 1e-6:
-                pass
-            else:
-                loss[i] = 1.5*loss[i]
+        # for i in range(loss.shape[0]):
+        #     if class_[i] < 1e-6:
+        #         pass
+        #     else:
+        #         loss[i] = 1.5*loss[i]
         loss = loss.mean() 
         return loss
 

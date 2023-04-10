@@ -29,7 +29,7 @@ class NBADataset(Dataset):
         self.seq_len = self.obs_len + self.pred_len
 
         if training:
-            data_root = 'datasets/nba/train.npy'
+            data_root = 'datasets/nba/train_no_aug.npy'
         else:
             data_root = 'datasets/nba/test.npy'
 

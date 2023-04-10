@@ -20,3 +20,5 @@ data
 weights
 no_aug
 weights_great
+path_reverse
+path_reverse_no_aug

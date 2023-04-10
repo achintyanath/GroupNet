@@ -25,7 +25,7 @@ class Event:
     
     def get_traj(self):
         moment_length = len(self.moments)     
-        total_len  = 16
+        total_len  = 15
         total_time = total_len*10
         traj_num = moment_length // total_time # 50 + 100, past 50(0.04s, 2s), future 100 (0.04s, 4s)
         all_all_player_locations = [] #(N,total_len,11,2)
@@ -55,7 +55,7 @@ class Event:
             # if self.moments[time_stamp2].game_clock - self.moments[time_stamp1].game_clock < -5.7 or self.moments[time_stamp2].game_clock - self.moments[time_stamp1].game_clock> -5.5:
             #     continue
             all_player_locations = [] # (total_len,11,2)
-            for j in range(total_len-1):
+            for j in range(total_len):
                 time_stamp = total_time * i + 10 * j
                 cur_moment = self.moments[time_stamp]
                 player_locations = []  #(11,2)
@@ -63,23 +63,31 @@ class Event:
                 for k in range(10):
                     player_locations.append([cur_moment.players[k].x,cur_moment.players[k].y,0])
                 player_locations.append([cur_moment.ball.x,cur_moment.ball.y,0])
+                
                 all_player_locations.append(player_locations)
+            
+            # for j in range(total_len):
+            #     print("x ",all_player_locations[j][0][0],"y ",all_player_locations[j][0][1],"class ",all_player_locations[j][0][2])
+
             all_all_player_locations.append(all_player_locations)
 
-            for d in range(1,6):
-                all_player_locations = [] # (total_len,11,2)
-                for j in range(total_len):
-                    if j+1 == d:
-                        continue
-                    time_stamp = total_time * i + 10 * j
-                    cur_moment = self.moments[time_stamp]
-                    player_locations = []  #(11,2)
 
-                    for k in range(10):
-                        player_locations.append([cur_moment.players[k].x,cur_moment.players[k].y,d*(94/28)])
-                    player_locations.append([cur_moment.ball.x,cur_moment.ball.y,d*(94/28)])
-                    all_player_locations.append(player_locations)
-                all_all_player_locations.append(all_player_locations)
+            all_player_locations = []
+            for j in range(total_len):
+                time_stamp = total_time * i + total_time - 10*(j+1)
+                cur_moment = self.moments[time_stamp]
+                player_locations = []  #(11,2)
+
+                for k in range(10):
+                    player_locations.append([cur_moment.players[k].x,cur_moment.players[k].y,1])
+                player_locations.append([cur_moment.ball.x,cur_moment.ball.y,1])
+                all_player_locations.append(player_locations)
+            
+            # print("reversed path")
+            # for j in range(total_len):
+            #     print("x ",all_player_locations[j][0][0],"y ",all_player_locations[j][0][1],"class ",all_player_locations[j][0][2])
+            all_all_player_locations.append(all_player_locations)
+
         all_all_player_locations = np.array(all_all_player_locations,dtype=np.float32)
         del_list = []
         # check if the traj contiguous
