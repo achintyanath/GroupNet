@@ -30,10 +30,14 @@ all_trajs = np.concatenate(all_trajs,axis=0)
 all_trajs = np.unique(all_trajs,axis=0)
 print(len(all_trajs))
 index = list(range(len(all_trajs)))
-from random import shuffle
-shuffle(index)
+
 train_set = all_trajs[index[:int(0.7*len(all_trajs))]]
 test_set = all_trajs[index[int(0.7*len(all_trajs)):]]
+
+from random import shuffle
+shuffle(train_set)
+shuffle(test_set)
+
 sanitised_train_set = np.zeros((1,15, 11, 3))
 
 train_set_no_aug = np.zeros((1,15, 11, 3))
