@@ -180,13 +180,15 @@ class PastEncoder(nn.Module):
         self.input_fc2 = nn.Linear(self.model_dim*args.past_length,self.model_dim)
         self.input_fc3 = nn.Linear(self.model_dim+3,self.model_dim)
 
-        self.interaction = MS_HGNN_oridinary(
+        self.interaction = MS_HGNN_hyper(
             embedding_dim=16,
             h_dim=self.model_dim,
             mlp_dim=64,
             bottleneck_dim=self.model_dim,
             batch_norm=0,
-            nmp_layers=1
+            nmp_layers=1,
+            scale=2,
+            type_gen = args.type_gen
         )
 
         if len(args.hyper_scales) > 0:
@@ -281,7 +283,7 @@ class PastEncoder(nn.Module):
         # this is the affinity matrix
         
         # print("feat_corr", feat_corr.shape)
-        ftraj_inter,_ = self.interaction(ftraj_input)
+        ftraj_inter,_ = self.interaction(ftraj_input,feat_corr)
         if len(self.args.hyper_scales) > 0:
             ftraj_inter_hyper,_ = self.interaction_hyper(ftraj_input,feat_corr)
         if len(self.args.hyper_scales) > 1:
@@ -312,14 +314,16 @@ class FutureEncoder(nn.Module):
         self.input_fc2 = nn.Linear(self.model_dim*self.args.future_length, self.model_dim)
         self.input_fc3 = nn.Linear(self.model_dim+3, self.model_dim)
 
-        self.interaction = MS_HGNN_oridinary(
+        self.interaction = MS_HGNN_hyper(
             embedding_dim=16,
             h_dim=self.model_dim,
             mlp_dim=64,
             bottleneck_dim=self.model_dim,
             batch_norm=0,
             nmp_layers=1,
-            vis=False
+            vis=False,
+            scale=2,
+            type_gen = args.type_gen
         )
 
         if len(args.hyper_scales) > 0:
@@ -391,7 +395,7 @@ class FutureEncoder(nn.Module):
         ftraj_input = self.input_fc3(self.add_category(ftraj_input))
         query_input = F.normalize(ftraj_input,p=2,dim=2)
         feat_corr = torch.matmul(query_input,query_input.permute(0,2,1))
-        ftraj_inter,_ = self.interaction(ftraj_input)
+        ftraj_inter,_ = self.interaction(ftraj_input,feat_corr)
 
         if len(self.args.hyper_scales) > 0:
             ftraj_inter_hyper,_ = self.interaction_hyper(ftraj_input,feat_corr)
@@ -526,7 +530,7 @@ class GroupNet(nn.Module):
             if class_[i] < 1e-6:
                 pass
             else:
-                loss[i] = 1.5*loss[i]
+                loss[i] = 0.2*loss[i]
         loss = loss.mean() 
         return loss
 
