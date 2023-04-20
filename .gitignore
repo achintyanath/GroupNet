@@ -20,3 +20,7 @@ data
 weights
 no_aug
 weights_great
+no_shuffle
+no_shuffle_org
+path_reverse
+path_reverse_no_aug
