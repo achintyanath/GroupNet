@@ -5,7 +5,7 @@ def parse():
     p = argparse.ArgumentParser("UniGNN: Unified Graph and Hypergraph Message Passing Model", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('--data', type=str, default='coauthorship', help='data name (coauthorship/cocitation)')
     p.add_argument('--dataset', type=str, default='cora', help='dataset name (e.g.: cora/dblp for coauthorship, cora/citeseer/pubmed for cocitation)')
-    p.add_argument('--model-name', type=str, default='UniGIN', help='UniGNN Model(UniGCN, UniGAT, UniGIN, UniSAGE...)')
+    p.add_argument('--model-name', type=str, default='UniGAT', help='UniGNN Model(UniGCN, UniGAT, UniGIN, UniSAGE...)')
     p.add_argument('--first-aggregate', type=str, default='mean', help='aggregation for hyperedge h_e: max, sum, mean')
     p.add_argument('--second-aggregate', type=str, default='sum', help='aggregation for node x_i: max, sum, mean')
     p.add_argument('--add-self-loop', action="store_true", help='add-self-loop to hypergraph')

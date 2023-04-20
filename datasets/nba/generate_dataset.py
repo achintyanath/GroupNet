@@ -35,7 +35,7 @@ index = list(range(len(all_trajs)))
 train_set = all_trajs[index[:int(0.7*len(all_trajs))]]
 test_set = all_trajs[index[int(0.7*len(all_trajs)):]]
 
-from random import shufflevi
+from random import shuffle
 shuffle(train_set)
 shuffle(test_set)
 

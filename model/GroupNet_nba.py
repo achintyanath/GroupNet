@@ -526,7 +526,7 @@ class GroupNet(nn.Module):
             if class_[i] < 1e-6:
                 pass
             else:
-                loss[i] = 1.5*loss[i]
+                loss[i] = 0.2*loss[i]
         loss = loss.mean() 
         return loss
 

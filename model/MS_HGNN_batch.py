@@ -8,6 +8,16 @@ from torch.autograd import Variable
 from model.hypergraph_generation.nearest_neighbour import gen_knn_hg
 from model.hypergraph_generation.sparse import gen_l1_hg
 from model.hypergraph_generation.clustering import gen_clustering_hg
+from torch_geometric.nn import HypergraphConv
+# from model.hypergraph_learning.conv import HypergraphConv
+from model.config import parse
+import torch_sparse
+from model.UNIGNN import *
+from scipy.sparse import csc_matrix
+
+
+
+args = parse()
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -274,7 +284,10 @@ class MS_HGNN_hyper(nn.Module):
         self.spatial_transform = nn.Linear(h_dim,h_dim)
         hdim_extend = 64
         self.hdim_extend = hdim_extend
-        self.edge_types = 10
+        self.edge_types = 64
+        self.hyperconv = HypergraphConv(64, 64)
+        self.hyperconv2 = HypergraphConv(64,64)
+        self.hyperconv3 = HypergraphConv(64,64)
 
         self.nmp_mlp_start = MLP_dict_softmax(input_dim=hdim_extend, output_dim=h_dim, hidden_size=(128,),edge_types=self.edge_types)
         self.nmp_mlps = self.make_nmp_mlp()
@@ -353,7 +366,7 @@ class MS_HGNN_hyper(nn.Module):
         batch = feat.shape[0]
         actor_number = feat.shape[1]
         if scale_factor == actor_number:
-            H_matrix = torch.ones(batch,1,actor_number).type_as(feat)
+            H_matrix = torch.ones(batch,actor_number,actor_number).type_as(feat)
             return H_matrix
         group_size = scale_factor
         if group_size < 1:
@@ -364,6 +377,23 @@ class MS_HGNN_hyper(nn.Module):
         H_matrix = H_matrix.scatter(2,indice,1)
 
         return H_matrix
+
+    def init_adj_attention2(self, feat,feat_corr, scale_factor=2):
+        batch = feat.shape[0]
+        actor_number = feat.shape[1]
+        if scale_factor == actor_number:
+            H_matrix = torch.ones(batch,actor_number,actor_number).type_as(feat)
+            return H_matrix
+        group_size = scale_factor
+        if group_size < 1:
+            group_size = 1
+
+        _,indice = torch.topk(feat_corr,dim=2,k=group_size,largest=True)
+        H_matrix = torch.zeros(batch,actor_number,actor_number).type_as(feat)
+        H_matrix = H_matrix.scatter(2,indice,1)
+
+        return H_matrix
+
 
     def init_adj_attention_listall(self, feat,feat_corr, scale_factor=2):
         batch = feat.shape[0]
@@ -393,7 +423,7 @@ class MS_HGNN_hyper(nn.Module):
     def forward(self, h_states, corr):
 
         curr_hidden = h_states
-
+        device = h_states.get_device()
         if self.type_gen == 0: 
             if self.listall:
                 H = self.init_adj_attention_listall(curr_hidden,corr,scale_factor=self.scale)
@@ -406,14 +436,15 @@ class MS_HGNN_hyper(nn.Module):
             H = np.zeros(shape=(len(h_states1), len(h_states1[0]),len(h_states1[0])))
             actor_number = h_states.shape[1]
             if self.scale == actor_number:
-                H = torch.ones(h_states.shape[0],1,actor_number).type_as(h_states)
+                H = torch.ones(h_states.shape[0],actor_number,actor_number).type_as(h_states)
             else :
                 for i in range(h_states.shape[0]):
                     if self.type_gen == 1:
-                        hg = gen_knn_hg(h_states1[i],is_prob =False, n_neighbors=self.scale-1)
+                        hg = gen_knn_hg(h_states1[i],is_prob = True, n_neighbors=self.scale-1)
+                        H[i] = np.transpose(hg._H.toarray())
                     else :
                         hg = gen_l1_hg(h_states1[i], gamma=1., n_neighbors=self.scale-1, log=False)
-                    H[i] = np.ceil(np.transpose(hg._H.toarray()))
+                        H[i] = np.ceil(np.transpose(hg._H.toarray()))
                 H = torch.from_numpy(H).float().to(h_states.get_device())
 
         if self.type_gen == 3:
@@ -435,22 +466,40 @@ class MS_HGNN_hyper(nn.Module):
 
                     H[i] = H1
                 H = torch.from_numpy(H).float().to(h_states.get_device())
+        batch = curr_hidden.shape[0]
+        
+        factor = torch.zeros(batch,11,10).to(h_states.get_device())
+        nodes_feat_final = torch.zeros([batch, 11,64], device=device)
+        
+        for j in range(0, batch):
+            H_spc =  csc_matrix(H[j].cpu().numpy()).tocsr()
+            degV = torch.from_numpy(H_spc.sum(1)).view(-1, 1).float()
+            degE2 = torch.from_numpy(H_spc.sum(0)).view(-1, 1).float()
 
-        edge_hidden = self.node2edge(curr_hidden, H, idx=0) 
-        edge_feat, factor = self.nmp_mlp_start(edge_hidden)                      
-        node_feat = curr_hidden
-        node2edge_idx = 0
-        if self.nmp_layers <= 1:
-            pass
-        else:
-            for nmp_l, nmp_mlp in enumerate(self.nmp_mlps):
-                if nmp_l%2==0:
-                    node_feat = nmp_mlp(self.edge2node(edge_feat,node_feat,H,node2edge_idx)) 
-                    node2edge_idx += 1
-                else:    
-                    edge_feat, _ = nmp_mlp(self.node2edge(node_feat, H, idx=node2edge_idx)) 
-        node_feat = self.nmp_mlp_end(self.edge2node(edge_feat,node_feat, H,node2edge_idx))
-        return node_feat, factor
+            (row, col), value = torch_sparse.from_scipy(H_spc)
+            V, E = row, col
+            from torch_scatter import scatter
+            assert args.first_aggregate in ('mean', 'sum'), 'use `mean` or `sum` for first-stage aggregation'
+            degE = scatter(degV[V], E, dim=0, reduce=args.first_aggregate)
+            degE = degE.pow(-0.5)
+            degV = degV.pow(-0.5)
+            degV[degV.isinf()] = 1 # when not added self-loop, some nodes might not be connected with any edge
+
+
+            V, E = V.cuda(), E.cuda()
+            args.degV = degV.cuda()
+            args.degE = degE.cuda()
+            args.degE2 = degE2.pow(-1.).cuda()
+
+            nfeat, nclass = 64, 64;
+            nlayer = 3
+            nhid = 64
+            nhead = args.nhead
+            model = UniGCNII(args, nfeat, nhid, nclass, nlayer, nhead, V, E).to(device) 
+            X = model(curr_hidden[j])
+            nodes_feat_final[j] = X
+
+        return nodes_feat_final, factor
 
 
 def sample_gumbel(shape, eps=1e-10):
@@ -521,3 +570,12 @@ def my_softmax(input, axis=1):
     trans_input = input.transpose(axis, 0).contiguous()
     soft_max_1d = F.softmax(trans_input)
     return soft_max_1d.transpose(axis, 0)
+# missing coordinates -> Dropout network (Drop input points), using masking (non existent dummy value), 
+# reverse the positions
+# missing coordinates -> Take 6 remove 1 if you want to do t = 5,d=3, determine ration using cross validation
+# reverse the positions
+# continue with hypergarph neural message passing parellely
+
+# Above was for training
+
+# refine predictions by taking average (ensemble approach in testing)
