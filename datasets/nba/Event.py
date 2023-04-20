@@ -79,8 +79,8 @@ class Event:
                 player_locations = []  #(11,2)
 
                 for k in range(10):
-                    player_locations.append([cur_moment.players[k].x,cur_moment.players[k].y,1])
-                player_locations.append([cur_moment.ball.x,cur_moment.ball.y,1])
+                    player_locations.append([cur_moment.players[k].x,cur_moment.players[k].y,94/28])
+                player_locations.append([cur_moment.ball.x,cur_moment.ball.y,94/28])
                 all_player_locations.append(player_locations)
             
             # print("reversed path")
