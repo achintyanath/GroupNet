@@ -76,6 +76,7 @@ class Event:
                     player_locations.append([cur_moment.players[k].x,cur_moment.players[k].y,6*94/28])
                 player_locations.append([cur_moment.ball.x,cur_moment.ball.y,6*94/28])
                 all_player_locations.append(player_locations)
+            all_all_player_locations.append(all_player_locations)
 
             for d in range(1,6):
                 all_player_locations = [] # (total_len,11,2)
