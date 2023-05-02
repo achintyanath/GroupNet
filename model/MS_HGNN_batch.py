@@ -86,6 +86,7 @@ class MS_HGNN_oridinary(nn.Module):
         for i in range(nmp_layers):
             node2edge_start_mlp.append(MLP(input_dim = h_dim, output_dim = hdim_extend, hidden_size=(256,)))
         self.node2edge_start_mlp = nn.ModuleList(node2edge_start_mlp)
+        self.hyperconv = HypergraphConv(64, 64,use_attention=True)
         edge_aggregation_list = []
         for i in range(nmp_layers):
             edge_aggregation_list.append(edge_aggregation(input_dim = h_dim, output_dim = bottleneck_dim, hidden_size=(128,),edge_types=self.edge_types))
@@ -178,7 +179,34 @@ class MS_HGNN_oridinary(nn.Module):
                 else:    
                     edge_feat, _ = nmp_mlp(self.node2edge(node_feat, rel_rec, rel_send,nodetoedge_idx)) # [num_ped, h_dim] -> [num_edge, 2*h_dim] -> [num_edge, h_dim]
         node_feat = self.nmp_mlp_end(self.edge2node(edge_feat, rel_rec, rel_send, node_feat,nodetoedge_idx))
-        return node_feat, factors
+        H = rel_rec + rel_send
+
+        edge_feature_final = self.node2edge(node_feat, rel_rec, rel_send,nodetoedge_idx)
+  
+        
+        batch = curr_hidden.shape[0]
+        device = h_states.get_device()
+
+        nodes_feat_final = torch.zeros([batch, 11,64], device=device)
+        edges_index = torch.arange(121).to(h_states.get_device())
+        repeat = torch.full((121,), 2).to(h_states.get_device())
+        for i in range(0,11):
+            repeat[i*11] = 1
+        edges_index = edges_index.repeat_interleave(repeat)
+
+
+        for j in range(0, batch):
+            index  = H[j]
+            nodes_index_edges = torch.nonzero(torch.tensor(index[0]), as_tuple=True)[0]
+            for i in range(1,len(index)):
+                nodes_index_edges =  torch.cat((nodes_index_edges,torch.nonzero(torch.tensor(index[i]), as_tuple=True)[0]))            
+            z = torch.stack((nodes_index_edges,edges_index))
+            nodes_huehuhe = self.hyperconv(curr_hidden[j],z,hyperedge_attr =edge_feature_final)
+            nodes_feat_final[j] = nodes_huehuhe
+        nodes_feat_final = torch.zeros([batch, 11, 64], device=device)
+
+
+        return nodes_feat_final, factors
 
 
 class MLP(nn.Module):
