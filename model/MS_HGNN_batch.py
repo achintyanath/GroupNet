@@ -8,6 +8,7 @@ from torch.autograd import Variable
 from model.hypergraph_generation.nearest_neighbour import gen_knn_hg
 from model.hypergraph_generation.sparse import gen_l1_hg
 from model.hypergraph_generation.clustering import gen_clustering_hg
+from torch_geometric.nn import HypergraphConv
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -275,6 +276,7 @@ class MS_HGNN_hyper(nn.Module):
         hdim_extend = 64
         self.hdim_extend = hdim_extend
         self.edge_types = 10
+        self.hyperconv = HypergraphConv(64, 64,use_attention=True)
 
         self.nmp_mlp_start = MLP_dict_softmax(input_dim=hdim_extend, output_dim=h_dim, hidden_size=(128,),edge_types=self.edge_types)
         self.nmp_mlps = self.make_nmp_mlp()
@@ -353,7 +355,7 @@ class MS_HGNN_hyper(nn.Module):
         batch = feat.shape[0]
         actor_number = feat.shape[1]
         if scale_factor == actor_number:
-            H_matrix = torch.ones(batch,1,actor_number).type_as(feat)
+            H_matrix = torch.ones(batch,actor_number,actor_number).type_as(feat)
             return H_matrix
         group_size = scale_factor
         if group_size < 1:
@@ -393,6 +395,7 @@ class MS_HGNN_hyper(nn.Module):
     def forward(self, h_states, corr):
 
         curr_hidden = h_states
+        device = h_states.get_device()
 
         if self.type_gen == 0: 
             if self.listall:
@@ -437,7 +440,7 @@ class MS_HGNN_hyper(nn.Module):
                 H = torch.from_numpy(H).float().to(h_states.get_device())
 
         edge_hidden = self.node2edge(curr_hidden, H, idx=0) 
-        edge_feat, factor = self.nmp_mlp_start(edge_hidden)                      
+        edge_feat, factor = self.nmp_mlp_start(edge_hidden)     
         node_feat = curr_hidden
         node2edge_idx = 0
         if self.nmp_layers <= 1:
@@ -450,7 +453,25 @@ class MS_HGNN_hyper(nn.Module):
                 else:    
                     edge_feat, _ = nmp_mlp(self.node2edge(node_feat, H, idx=node2edge_idx)) 
         node_feat = self.nmp_mlp_end(self.edge2node(edge_feat,node_feat, H,node2edge_idx))
-        return node_feat, factor
+        batch = curr_hidden.shape[0]
+
+        nodes_feat_final = torch.zeros([batch, 11,64], device=device)
+        edges_index = torch.arange(11).to(h_states.get_device())
+        edges_index = edges_index.repeat_interleave(self.scale)
+
+        edge_features_modified = self.node2edge(node_feat, H, idx=node2edge_idx)
+
+        for j in range(0, batch):
+            index  = H[j]
+            nodes_index_edges = torch.nonzero(torch.tensor(index[0]), as_tuple=True)[0]
+            for i in range(1,len(index)):
+                nodes_index_edges =  torch.cat((nodes_index_edges,torch.nonzero(torch.tensor(index[i]), as_tuple=True)[0]))            
+            z = torch.stack((nodes_index_edges,edges_index))
+            nodes_huehuhe = self.hyperconv(curr_hidden[j],z,hyperedge_attr =edge_features_modified)
+            nodes_feat_final[j] = nodes_huehuhe
+        nodes_feat_final = torch.zeros([batch, 11, 64], device=device)
+
+        return nodes_feat_final, factor
 
 
 def sample_gumbel(shape, eps=1e-10):
